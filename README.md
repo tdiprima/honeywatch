@@ -1,4 +1,4 @@
-# honeywatch
+# honeywatch 🍯 
 
 Honeytoken intrusion detector for Linux using auditd and Python that turns raw audit logs into readable alerts.
 
@@ -23,7 +23,7 @@ This is not a vulnerable service exposed to the internet. It is a tripwire: the 
 ## Requirements
 
 - Ubuntu (or any systemd Linux with `auditd`)
-- Python 3 (standard library only)
+- Python 3.12 or newer (standard library only)
 - root for installing audit rules and reading the audit log
 
 ## Quick start
