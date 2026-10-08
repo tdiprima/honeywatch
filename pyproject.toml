@@ -1,0 +1,7 @@
+[project]
+name = "honeywatch"
+version = "0.1.0"
+description = "Honeytoken intrusion detector for Linux using auditd and Python that turns raw audit logs into readable alerts"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
