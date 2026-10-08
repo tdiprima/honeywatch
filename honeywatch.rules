@@ -1,0 +1,13 @@
+# auditd rules for honeywatch.
+# -w = watch this path
+# -p rwxa = alert on read, write, execute, attribute change
+# -k honeytoken = tag every event so we can find them with: ausearch -k honeytoken
+
+-w /opt/honeytokens/AWS_PRODUCTION_KEYS.txt -p rwxa -k honeytoken
+-w /opt/honeytokens/payroll_passwords.csv -p rwxa -k honeytoken
+-w /opt/honeytokens/database-backup-credentials.txt -p rwxa -k honeytoken
+-w /opt/honeytokens/DO_NOT_DELETE_PROD.key -p rwxa -k honeytoken
+-w /opt/internal-api/.env -p rwxa -k honeytoken
+
+# Also watch the directory itself so creating/deleting bait files is caught.
+-w /opt/honeytokens -p wa -k honeytoken
