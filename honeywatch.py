@@ -8,6 +8,7 @@ Usage:
     cat audit.log | honeywatch -    # read from stdin
     honeywatch --syslog             # also send each alert to syslog via logger
     honeywatch --report incident.md # also write a Markdown incident report
+    sudo honeywatch --follow        # watch the audit log live and alert as it happens
 
 An audit *event* is several *records* that share the same id, e.g.
     type=SYSCALL msg=audit(1696780042.123:456): ... comm="cat" ... key="honeytoken"
@@ -24,6 +25,7 @@ import time
 from datetime import datetime
 
 AUDIT_KEY = "honeytoken"
+AUDIT_LOG = "/var/log/audit/audit.log"
 
 # What kind of tool touched the file? Keyed by the process name (comm=).
 TOOL_KINDS = {
@@ -161,6 +163,48 @@ def username(uid):
 
 
 # ---------------------------------------------------------------------------
+# Live mode
+# ---------------------------------------------------------------------------
+
+def follow(path, on_alert):
+    """
+    Tail the audit log forever. Records for one event arrive over several lines,
+    so we collect them by event id and hand the event over once it is complete.
+    auditd ends each event with a PROCTITLE (or EOE) record; as a safety net we
+    also flush anything that has been waiting more than two seconds.
+    """
+    pending = {}        # event id -> event dict (see group_into_events)
+    last_seen = {}      # event id -> time we last got a record for it
+
+    def flush(event_id):
+        alert = summarize(pending.pop(event_id))
+        last_seen.pop(event_id, None)
+        if alert:
+            on_alert(alert)
+
+    with open(path) as f:
+        f.seek(0, 2)    # start at the end: only new activity matters
+        while True:
+            line = f.readline()
+            if not line:
+                for event_id in [e for e, t in last_seen.items() if time.time() - t > 2]:
+                    flush(event_id)
+                time.sleep(0.5)
+                continue
+
+            if AUDIT_KEY not in line and not any(e in line for e in pending):
+                continue    # unrelated event, skip cheaply
+
+            for event in group_into_events([line]):
+                existing = pending.setdefault(event["id"], event)
+                if existing is not event:
+                    existing["records"].extend(event["records"])
+                last_seen[event["id"]] = time.time()
+                if event["records"][0][0] in ("PROCTITLE", "EOE"):
+                    flush(event["id"])
+
+
+# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 
@@ -237,11 +281,25 @@ def main():
     parser = argparse.ArgumentParser(description="Readable alerts from auditd honeytoken events.")
     parser.add_argument("--file", "-f", metavar="PATH",
                         help="read raw audit records from PATH ('-' for stdin) instead of ausearch")
+    parser.add_argument("--follow", action="store_true",
+                        help=f"tail {AUDIT_LOG} and print alerts as they happen")
     parser.add_argument("--syslog", action="store_true",
                         help="also send each alert to syslog with logger")
     parser.add_argument("--report", metavar="PATH",
                         help="also write a Markdown incident report to PATH")
     args = parser.parse_args()
+
+    if args.follow:
+        def on_alert(alert):
+            print(format_alert(alert), flush=True)
+            if args.syslog:
+                send_to_syslog(alert)
+        log_path = args.file or AUDIT_LOG
+        print(f"honeywatch: watching {log_path} for key '{AUDIT_KEY}'...", flush=True)
+        try:
+            follow(log_path, on_alert)
+        except KeyboardInterrupt:
+            return
 
     lines = read_from_file(args.file) if args.file else read_from_auditd()
     events = group_into_events(lines)

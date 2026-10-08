@@ -1,0 +1,15 @@
+[Unit]
+Description=honeywatch - honeytoken intrusion detector
+After=auditd.service
+Requires=auditd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/honeywatch --follow --syslog
+Restart=on-failure
+RestartSec=5
+# Needs root to read /var/log/audit/audit.log.
+User=root
+
+[Install]
+WantedBy=multi-user.target
